@@ -1,5 +1,8 @@
+const cors = require('cors');
 const http = require('http');
 const axios = require('axios');
+
+app.use(cors());
 
 const servers = [
     { target: process.env.SERVER_1 },
