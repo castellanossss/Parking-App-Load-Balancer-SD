@@ -59,6 +59,7 @@ app.all('*', async (req, res) => {
         currentServer = serverIndex; // Actualiza el índice para el siguiente intento.
 
         try {
+            console.log(`[${req.method}] - Solicitud del cliente ${req.socket.remoteAddress} redirigida a ${server.url + req.url}`);
             const response = await fetch(server.url + req.url, {
                 method: req.method,
                 headers: { ...req.headers, 'Content-Type': 'application/json' },
