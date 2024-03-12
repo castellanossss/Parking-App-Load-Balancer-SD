@@ -1,9 +1,8 @@
 const cors = require('cors');
 const express = require('express');
-const http = require('http');
 const axios = require('axios');
-const app = express();
 
+const app = express();
 app.use(cors());
 
 const servers = [
@@ -14,12 +13,9 @@ const servers = [
 
 let currentServer = 0;
 
-const server = http.createServer(async (req, res) => {
+app.all('*', async (req, res) => {
     const target = servers[currentServer].target;
-    const clientIp = req.socket.remoteAddress;
-
-    console.log(`Solicitud del cliente ${clientIp} redirigida a ${target}`);
-
+    console.log(`Solicitud del cliente ${req.socket.remoteAddress} redirigida a ${target}`);
     currentServer = (currentServer + 1) % servers.length;
 
     try {
@@ -27,18 +23,19 @@ const server = http.createServer(async (req, res) => {
             method: req.method,
             url: target + req.url,
             headers: req.headers,
-            data: req.body
+            data: req.body,
+            responseType: 'stream'
         });
 
-        res.writeHead(response.status, response.headers);
-        res.end(response.data);
+        res.setHeader('Access-Control-Allow-Origin', '*'); // Set CORS headers if needed
+        response.data.pipe(res);
     } catch (error) {
         console.error(`Error al conectar con el servidor ${target}: ${error.message}`);
-        res.writeHead(502);
-        res.end(`Error al conectar con el servidor ${target}`);
+        res.status(502).send(`Error al conectar con el servidor ${target}`);
     }
 });
 
-server.listen(8010, () => {
-    console.log('Load balancer listening on port 8010');
+const PORT = process.env.PORT || 8010;
+app.listen(PORT, () => {
+    console.log(`Load balancer listening on port ${PORT}`);
 });
