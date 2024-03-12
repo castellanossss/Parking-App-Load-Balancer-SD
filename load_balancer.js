@@ -1,41 +1,50 @@
-const cors = require('cors');
 const express = require('express');
-const axios = require('axios');
+const fetch = require('node-fetch');
+const cors = require('cors');
 
 const app = express();
 app.use(cors());
+app.use(express.json());
 
 const servers = [
-    { target: process.env.SERVER_1 },
-    { target: process.env.SERVER_2 },
-    { target: process.env.SERVER_3 }
+    process.env.SERVER_1,
+    process.env.SERVER_2,
+    process.env.SERVER_3
 ];
-
 let currentServer = 0;
 
 app.all('*', async (req, res) => {
-    const target = servers[currentServer].target;
-    console.log(`Solicitud del cliente ${req.socket.remoteAddress} redirigida a ${target}`);
+    const body = req.method !== 'GET' ? JSON.stringify(req.body) : undefined;
+    const headers = {
+        ...req.headers,
+        'Content-Type': 'application/json'
+    };
+
+    const target = servers[currentServer];
     currentServer = (currentServer + 1) % servers.length;
 
+    console.log(`Redirigiendo solicitud a ${target}`);
+
     try {
-        const response = await axios({
+        const response = await fetch(target + req.url, {
             method: req.method,
-            url: target + req.url,
-            headers: req.headers,
-            data: req.body,
-            timeout: 30000
+            headers: headers,
+            body: body
         });
 
-        res.setHeader('Access-Control-Allow-Origin', '*'); // Set CORS headers if needed
-        response.data.pipe(res);
+        if (!response.ok) {
+            throw new Error(`Error al realizar la solicitud a ${target}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        res.status(response.status).json(data);
     } catch (error) {
-        console.error(`Error al conectar con el servidor ${target}: ${error.message}`);
-        res.status(502).send(`Error al conectar con el servidor ${target}`);
+        console.error(error.message);
+        res.status(502).send("Error en el balanceador de carga al conectar con el backend.");
     }
 });
 
 const PORT = process.env.PORT || 8010;
 app.listen(PORT, () => {
-    console.log(`Load balancer listening on port ${PORT}`);
+    console.log(`Balanceador de carga escuchando en el puerto ${PORT}`);
 });
