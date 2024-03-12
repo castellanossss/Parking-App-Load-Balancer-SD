@@ -24,7 +24,7 @@ app.all('*', async (req, res) => {
             url: target + req.url,
             headers: req.headers,
             data: req.body,
-            responseType: 'stream'
+            timeout: 30000
         });
 
         res.setHeader('Access-Control-Allow-Origin', '*'); // Set CORS headers if needed
