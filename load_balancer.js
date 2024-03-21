@@ -1,20 +1,36 @@
 const express = require('express');
-const fetch = require('node-fetch');
+const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
+const FormData = require('form-data');
 const cors = require('cors');
-
+const multer = require('multer');
+const upload = multer();
 const app = express();
+const { exec } = require('child_process');
+
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-const servers = [
-    { url: process.env.SERVER_1, active: true },
-    { url: process.env.SERVER_2, active: true },
-    { url: process.env.SERVER_3, active: true }
+let servers = [
+    { url: process.env.SERVER_1, active: true, failCount: 0 },
+    { url: process.env.SERVER_2, active: true, failCount: 0 },
+    { url: process.env.SERVER_3, active: true, failCount: 0 }
 ];
+
+app.get('/register', (req, res) => {
+    const serverUrl = req.query.serverUrl;
+    if (serverUrl) {
+        servers.push({ url: serverUrl, active: true, failCount: 0 });
+        console.log(`Nuevo servidor registrado: ${serverUrl}`);
+        console.log('Lista de servidores: ', servers)
+        res.status(200).send('Servidor registrado exitosamente');
+    } else {
+        res.status(400).send('Falta la URL del servidor');
+    }
+});
 
 let currentServer = 0;
 
-// Función para encontrar el próximo servidor activo
 function getNextActiveServer(currentIndex) {
     const start = currentIndex;
     do {
@@ -27,24 +43,41 @@ function getNextActiveServer(currentIndex) {
     return -1;
 }
 
-// Esta función se llama regularmente para verificar la salud de los servidores.
 function checkServerHealth() {
     servers.forEach(async (server, index) => {
         try {
             const response = await fetch(server.url + '/health');
             if (!response.ok) throw new Error('Health check failed');
             servers[index].active = true;
+            servers[index].failCount = 0;
         } catch (error) {
             servers[index].active = false;
+            servers[index].failCount += 1;
             console.error(`Error en health check para el servidor ${server.url}: ${error.message}`);
+
+            if (servers[index].failCount >= 3) {
+                launchNewInstance(server.url);
+            }
         }
     });
 }
 
-// Establece el intervalo para las comprobaciones de salud.
-setInterval(checkServerHealth, 6000);
+function launchNewInstance(serverUrl) {
+    const scriptPath = '/scripts/deploy_new_backend_container.ps1';
+    const command = `pwsh -File ${scriptPath}`;
 
-app.all('*', async (req, res) => {
+    exec(command, (error, stdout, stderr) => {
+        if (error) {
+            console.error(`Error al ejecutar el script: ${error}`);
+            return;
+        }
+        console.log(`Script ejecutado exitosamente: ${stdout}`);
+    });
+}
+
+setInterval(checkServerHealth, 2000);
+
+app.all('*', upload.any(), async (req, res) => {
     let attempt = 0;
     let responseSent = false;
 
@@ -56,15 +89,36 @@ app.all('*', async (req, res) => {
         }
 
         const server = servers[serverIndex];
-        currentServer = serverIndex; // Actualiza el índice para el siguiente intento.
+        currentServer = serverIndex;
 
         try {
             console.log(`[${req.method}] - Solicitud del cliente ${req.socket.remoteAddress} redirigida a ${server.url + req.url}`);
-            const response = await fetch(server.url + req.url, {
+            const requestOptions = {
                 method: req.method,
-                headers: { ...req.headers, 'Content-Type': 'application/json' },
-                body: req.method !== 'GET' ? JSON.stringify(req.body) : undefined
-            });
+                headers: {
+                    ...req.headers,
+                    'host': new URL(server.url).host
+                },
+            };
+
+            if (req.is('multipart/form-data')) {
+                const formData = new FormData();
+                req.files.forEach(file => {
+                    formData.append(file.fieldname, file.buffer, file.originalname);
+                });
+                Object.keys(req.body).forEach(key => {
+                    formData.append(key, req.body[key]);
+                });
+                requestOptions.body = formData;
+                requestOptions.headers = {
+                    ...requestOptions.headers,
+                    ...formData.getHeaders()
+                };
+            } else if (req.method !== 'GET' && req.method !== 'HEAD') {
+                requestOptions.body = JSON.stringify(req.body);
+            }
+
+            const response = await fetch(server.url + req.url, requestOptions);
 
             if (response.ok) {
                 response.body.pipe(res);
@@ -73,7 +127,7 @@ app.all('*', async (req, res) => {
             }
         } catch (error) {
             console.error(`Error al conectar con el servidor ${server.url}: ${error.message}`);
-            servers[serverIndex].active = false; // Marca el servidor como inactivo si hay un error de red.
+            servers[serverIndex].active = false;
         }
 
         attempt++;

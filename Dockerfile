@@ -1,6 +1,14 @@
 # Utilizar la imagen de Node.js versión 20
 FROM node:20.11.1
 
+# Instalar PowerShell
+RUN apt-get update && \
+    apt-get install -y wget apt-transport-https software-properties-common && \
+    wget -q "https://packages.microsoft.com/config/debian/10/packages-microsoft-prod.deb" && \
+    dpkg -i packages-microsoft-prod.deb && \
+    apt-get update && \
+    apt-get install -y powershell
+
 # Establecer el directorio de trabajo en el contenedor
 WORKDIR /usr/src/app
 
