@@ -5,17 +5,12 @@ const cors = require('cors');
 const multer = require('multer');
 const upload = multer();
 const app = express();
-const { exec } = require('child_process');
 
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-let servers = [
-    { url: process.env.SERVER_1, active: true, failCount: 0 },
-    { url: process.env.SERVER_2, active: true, failCount: 0 },
-    { url: process.env.SERVER_3, active: true, failCount: 0 }
-];
+let servers = [];
 
 app.get('/register', (req, res) => {
     const serverUrl = req.query.serverUrl;
@@ -48,30 +43,11 @@ function checkServerHealth() {
         try {
             const response = await fetch(server.url + '/health');
             if (!response.ok) throw new Error('Health check failed');
-            servers[index].active = true;
-            servers[index].failCount = 0;
         } catch (error) {
             servers[index].active = false;
             servers[index].failCount += 1;
             console.error(`Error en health check para el servidor ${server.url}: ${error.message}`);
-
-            if (servers[index].failCount >= 3) {
-                launchNewInstance(server.url);
-            }
         }
-    });
-}
-
-function launchNewInstance(serverUrl) {
-    const scriptPath = '/scripts/deploy_new_backend_container.ps1';
-    const command = `pwsh -File ${scriptPath}`;
-
-    exec(command, (error, stdout, stderr) => {
-        if (error) {
-            console.error(`Error al ejecutar el script: ${error}`);
-            return;
-        }
-        console.log(`Script ejecutado exitosamente: ${stdout}`);
     });
 }
 

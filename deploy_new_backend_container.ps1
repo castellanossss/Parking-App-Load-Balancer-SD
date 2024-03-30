@@ -7,7 +7,7 @@ $networkName = "parking-service-net"
 $imageServerUrl = "image-server-container:3008"
 
 $timestamp = Get-Date -Format "yyyyMMddHHmmss"
-$containerName = "backend-container-$timestamp"
+$containerName = "backend-container-${timestamp}"
 
 # Looks for an available port
 $usedPorts = docker ps --format "{{.Ports}}" | Select-String -Pattern "\d+:\d+" -AllMatches | ForEach-Object { $_.Matches } | ForEach-Object { $_.Value.Split(":")[1] }
@@ -30,11 +30,13 @@ docker run --name $containerName -d --network $networkName -e IMAGES_SERVER_URL=
 # Show a confirmation message
 Write-Host "Contenedor $containerName creado y ejecutado exitosamente en el puerto $containerPort."
 
-# Después de levantar el contenedor
-$backendUrl = "http://${containerName}:3001"
-Invoke-RestMethod -Uri "http://192.168.1.4:8010/register?serverUrl=$backendUrl" -Method Get
+$hostIp = (Get-NetIPAddress -AddressFamily IPv4 -InterfaceAlias Ethernet).IPAddress
 
-$monitoringServerUrl = "http://192.168.1.4:4000/addServer"
+# Después de levantar el contenedor
+$backendUrl = "http://${hostIp}:${containerPort}"
+Invoke-RestMethod -Uri "http://10.4.72.127:8010/register?serverUrl=$backendUrl" -Method Get
+
+$monitoringServerUrl = "http://10.4.73.10:4000/addServer"
 $body = @{ serverUrl = "http://${containerName}:3001/checkHealth" } | ConvertTo-Json
 Invoke-RestMethod -Uri $monitoringServerUrl -Method Post -Body $body -ContentType "application/json"
 
