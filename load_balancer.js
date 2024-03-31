@@ -49,9 +49,10 @@ function checkServerHealth() {
     servers.forEach(async (server, index) => {
         if (server.healthCheckStarted) {
             try {
-                const response = await fetch(server.url + '/health');
+                const response = await fetch(server.url + '/health', { timeout: 5000 });
                 if (!response.ok) throw new Error('Health check failed');
                 servers[index].failCount = 0;
+                servers[index].retryAttempted = false; // Restablecer el indicador de reintento
             } catch (error) {
                 if (error.message === 'socket hang up' && !servers[index].retryAttempted) {
                     console.log(`Reintentando la conexión con el servidor ${server.url}...`);
