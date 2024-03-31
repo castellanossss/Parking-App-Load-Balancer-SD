@@ -24,6 +24,18 @@ app.get('/register', (req, res) => {
     }
 });
 
+app.post('/updateServerStatus', (req, res) => {
+    const { serverUrl, isActive } = req.body;
+    const server = servers.find(s => s.url === serverUrl);
+    if (server) {
+        server.active = isActive;
+        console.log(`Estado del servidor actualizado: ${serverUrl} - Activo: ${isActive}`);
+        res.status(200).send('Estado del servidor actualizado');
+    } else {
+        res.status(404).send('Servidor no encontrado');
+    }
+});
+
 let currentServer = 0;
 
 function getNextActiveServer(currentIndex) {
@@ -37,37 +49,6 @@ function getNextActiveServer(currentIndex) {
 
     return -1;
 }
-
-async function checkServerHealth() {
-    for (let index = 0; index < servers.length; index++) {
-        const server = servers[index];
-        if (server.healthCheckStarted) {
-            try {
-                const response = await fetch(server.url + '/health', { timeout: 5000 });
-                if (!response.ok) throw new Error('Health check failed');
-                servers[index].failCount = 0;
-                servers[index].active = true;
-                servers[index].retryAttempted = false;
-            } catch (error) {
-                if (error.message === 'socket hang up' && !servers[index].retryAttempted) {
-                    console.log(`Reintentando la conexión con el servidor ${server.url}...`);
-                    servers[index].retryAttempted = true;
-                } else {
-                    servers[index].failCount += 1;
-                    console.error(`Error en health check para el servidor ${server.url}: ${error.message}`);
-                    if (servers[index].failCount >= 3) {
-                        servers[index].active = false;
-                        setTimeout(() => {
-                            servers[index].healthCheckStarted = true;
-                        }, 30000);
-                    }
-                }
-            }
-        }
-    }
-}
-
-setInterval(checkServerHealth, 2000);
 
 app.all('*', upload.any(), async (req, res) => {
     let attempt = 0;
@@ -141,5 +122,4 @@ app.all('*', upload.any(), async (req, res) => {
 const PORT = process.env.PORT || 8010;
 app.listen(PORT, () => {
     console.log(`Balanceador de carga escuchando en el puerto ${PORT}`);
-    checkServerHealth();
 });
