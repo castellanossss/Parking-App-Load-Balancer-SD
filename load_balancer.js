@@ -91,10 +91,12 @@ app.all('*', upload.any(), async (req, res) => {
                 requestOptions.body = JSON.stringify(req.body);
             }
 
-            const response = await fetch(server.url + req.url, {
-                ...requestOptions,
-                timeout: 10000,
-            });
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000); // Timeout de 5 segundos
+            requestOptions.signal = controller.signal;
+
+            const response = await fetch(server.url + req.url, requestOptions);
+            clearTimeout(timeoutId); // Limpia el temporizador si la solicitud se completa a tiempo
 
             if (response.ok) {
                 response.body.pipe(res);
@@ -102,8 +104,11 @@ app.all('*', upload.any(), async (req, res) => {
                 break;
             }
         } catch (error) {
+            clearTimeout(timeoutId); // Limpia el temporizador si ocurre un error
             console.error(`Error al conectar con el servidor ${server.url}: ${error.message}`);
-            if (error.message === 'socket hang up' && !server.retryAttempted) {
+            if (error.name === 'AbortError') {
+                console.log(`La solicitud al servidor ${server.url} se canceló por tiempo de espera`);
+            } else if (error.message === 'socket hang up' && !server.retryAttempted) {
                 server.retryAttempted = true;
                 attempt--;
             } else {
@@ -118,6 +123,7 @@ app.all('*', upload.any(), async (req, res) => {
         res.status(502).send('No se pudo procesar la solicitud.');
     }
 });
+
 
 const PORT = process.env.PORT || 8010;
 app.listen(PORT, () => {
