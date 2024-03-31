@@ -92,8 +92,8 @@ app.all('*', upload.any(), async (req, res) => {
             }
 
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000); // Timeout de 5 segundos
             requestOptions.signal = controller.signal;
+            const timeoutId = setTimeout(() => controller.abort(), 5000); // Timeout de 5 segundos
 
             const response = await fetch(server.url + req.url, requestOptions);
             clearTimeout(timeoutId); // Limpia el temporizador si la solicitud se completa a tiempo
@@ -123,7 +123,6 @@ app.all('*', upload.any(), async (req, res) => {
         res.status(502).send('No se pudo procesar la solicitud.');
     }
 });
-
 
 const PORT = process.env.PORT || 8010;
 app.listen(PORT, () => {
