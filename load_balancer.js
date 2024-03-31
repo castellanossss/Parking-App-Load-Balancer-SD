@@ -15,15 +15,22 @@ let servers = [];
 app.get('/register', (req, res) => {
     const serverUrl = req.query.serverUrl;
     if (serverUrl) {
-        servers.push({ url: serverUrl, active: true, failCount: 0 });
+        servers.push({ url: serverUrl, active: true, failCount: 0, healthCheckStarted: false });
         console.log(`Nuevo servidor registrado: ${serverUrl}`);
-        console.log('Lista de servidores: ', servers)
+        console.log('Lista de servidores: ', servers);
+
+        setTimeout(() => {
+            const server = servers.find(s => s.url === serverUrl);
+            if (server) {
+                server.healthCheckStarted = true;
+            }
+        }, 10000);
+
         res.status(200).send('Servidor registrado exitosamente');
     } else {
         res.status(400).send('Falta la URL del servidor');
     }
 });
-
 let currentServer = 0;
 
 function getNextActiveServer(currentIndex) {
@@ -40,14 +47,17 @@ function getNextActiveServer(currentIndex) {
 
 function checkServerHealth() {
     servers.forEach(async (server, index) => {
-        try {
-            const response = await fetch(server.url + '/health');
-            if (!response.ok) throw new Error('Health check failed');
-        } catch (error) {
-            servers[index].failCount += 1;
-            console.error(`Error en health check para el servidor ${server.url}: ${error.message}`);
-            if (servers[index].failCount >= 3) {
-                servers[index].active = false;
+        if (server.healthCheckStarted) {
+            try {
+                const response = await fetch(server.url + '/health');
+                if (!response.ok) throw new Error('Health check failed');
+                servers[index].failCount = 0;
+            } catch (error) {
+                servers[index].failCount += 1;
+                console.error(`Error en health check para el servidor ${server.url}: ${error.message}`);
+                if (servers[index].failCount >= 3) {
+                    servers[index].active = false;
+                }
             }
         }
     });
