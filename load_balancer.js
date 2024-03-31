@@ -44,9 +44,11 @@ function checkServerHealth() {
             const response = await fetch(server.url + '/health');
             if (!response.ok) throw new Error('Health check failed');
         } catch (error) {
-            servers[index].active = false;
             servers[index].failCount += 1;
             console.error(`Error en health check para el servidor ${server.url}: ${error.message}`);
+            if (servers[index].failCount >= 3) {
+                servers[index].active = false;
+            }
         }
     });
 }
