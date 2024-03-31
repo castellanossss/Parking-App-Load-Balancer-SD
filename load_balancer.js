@@ -38,14 +38,15 @@ function getNextActiveServer(currentIndex) {
     return -1;
 }
 
-function checkServerHealth() {
-    servers.forEach(async (server, index) => {
+async function checkServerHealth() {
+    for (let index = 0; index < servers.length; index++) {
+        const server = servers[index];
         if (server.healthCheckStarted) {
             try {
                 const response = await fetch(server.url + '/health', { timeout: 5000 });
                 if (!response.ok) throw new Error('Health check failed');
                 servers[index].failCount = 0;
-                servers[index].active = true; // Reactivar el servidor si la comprobación de salud es exitosa
+                servers[index].active = true;
                 servers[index].retryAttempted = false;
             } catch (error) {
                 if (error.message === 'socket hang up' && !servers[index].retryAttempted) {
@@ -56,14 +57,14 @@ function checkServerHealth() {
                     console.error(`Error en health check para el servidor ${server.url}: ${error.message}`);
                     if (servers[index].failCount >= 3) {
                         servers[index].active = false;
-                        setTimeout(() => { // Volver a comprobar la salud del servidor después de 30 segundos
+                        setTimeout(() => {
                             servers[index].healthCheckStarted = true;
                         }, 30000);
                     }
                 }
             }
         }
-    });
+    }
 }
 
 setInterval(checkServerHealth, 2000);
