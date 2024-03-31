@@ -15,7 +15,7 @@ let servers = [];
 app.get('/register', (req, res) => {
     const serverUrl = req.query.serverUrl;
     if (serverUrl) {
-        servers.push({ url: serverUrl, active: true, failCount: 0, healthCheckStarted: false });
+        servers.push({ url: serverUrl, active: true, failCount: 0, healthCheckStarted: false, retryAttempted: false });
         console.log(`Nuevo servidor registrado: ${serverUrl}`);
         console.log('Lista de servidores: ', servers);
 
@@ -24,7 +24,7 @@ app.get('/register', (req, res) => {
             if (server) {
                 server.healthCheckStarted = true;
             }
-        }, 10000);
+        }, 5000);
 
         res.status(200).send('Servidor registrado exitosamente');
     } else {
@@ -53,10 +53,15 @@ function checkServerHealth() {
                 if (!response.ok) throw new Error('Health check failed');
                 servers[index].failCount = 0;
             } catch (error) {
-                servers[index].failCount += 1;
-                console.error(`Error en health check para el servidor ${server.url}: ${error.message}`);
-                if (servers[index].failCount >= 3) {
-                    servers[index].active = false;
+                if (error.message === 'socket hang up' && !servers[index].retryAttempted) {
+                    console.log(`Reintentando la conexión con el servidor ${server.url}...`);
+                    servers[index].retryAttempted = true;
+                } else {
+                    servers[index].failCount += 1;
+                    console.error(`Error en health check para el servidor ${server.url}: ${error.message}`);
+                    if (servers[index].failCount >= 3) {
+                        servers[index].active = false;
+                    }
                 }
             }
         }
@@ -106,7 +111,10 @@ app.all('*', upload.any(), async (req, res) => {
                 requestOptions.body = JSON.stringify(req.body);
             }
 
-            const response = await fetch(server.url + req.url, requestOptions);
+            const response = await fetch(server.url + req.url, {
+                ...requestOptions,
+                timeout: 10000,
+            });
 
             if (response.ok) {
                 response.body.pipe(res);
@@ -115,7 +123,12 @@ app.all('*', upload.any(), async (req, res) => {
             }
         } catch (error) {
             console.error(`Error al conectar con el servidor ${server.url}: ${error.message}`);
-            servers[serverIndex].active = false;
+            if (error.message === 'socket hang up' && !server.retryAttempted) {
+                server.retryAttempted = true;
+                attempt--;
+            } else {
+                servers[serverIndex].active = false;
+            }
         }
 
         attempt++;
