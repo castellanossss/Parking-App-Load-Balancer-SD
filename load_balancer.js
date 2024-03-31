@@ -63,6 +63,8 @@ app.all('*', upload.any(), async (req, res) => {
 
         const server = servers[serverIndex];
         currentServer = serverIndex;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
 
         try {
             console.log(`[${req.method}] - Solicitud del cliente ${req.socket.remoteAddress} redirigida a ${server.url + req.url}`);
@@ -91,9 +93,7 @@ app.all('*', upload.any(), async (req, res) => {
                 requestOptions.body = JSON.stringify(req.body);
             }
 
-            const controller = new AbortController();
-            requestOptions.signal = controller.signal;
-            const timeoutId = setTimeout(() => controller.abort(), 5000); // Timeout de 5 segundos
+            requestOptions.signal = controller.signal; 
 
             const response = await fetch(server.url + req.url, requestOptions);
             clearTimeout(timeoutId); // Limpia el temporizador si la solicitud se completa a tiempo
