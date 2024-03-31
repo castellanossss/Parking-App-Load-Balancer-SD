@@ -15,22 +15,15 @@ let servers = [];
 app.get('/register', (req, res) => {
     const serverUrl = req.query.serverUrl;
     if (serverUrl) {
-        servers.push({ url: serverUrl, active: true, failCount: 0, healthCheckStarted: false, retryAttempted: false });
+        servers.push({ url: serverUrl, active: true, failCount: 0, healthCheckStarted: true, retryAttempted: false });
         console.log(`Nuevo servidor registrado: ${serverUrl}`);
         console.log('Lista de servidores: ', servers);
-
-        setTimeout(() => {
-            const server = servers.find(s => s.url === serverUrl);
-            if (server) {
-                server.healthCheckStarted = true;
-            }
-        }, 5000);
-
         res.status(200).send('Servidor registrado exitosamente');
     } else {
         res.status(400).send('Falta la URL del servidor');
     }
 });
+
 let currentServer = 0;
 
 function getNextActiveServer(currentIndex) {
@@ -52,7 +45,8 @@ function checkServerHealth() {
                 const response = await fetch(server.url + '/health', { timeout: 5000 });
                 if (!response.ok) throw new Error('Health check failed');
                 servers[index].failCount = 0;
-                servers[index].retryAttempted = false; // Restablecer el indicador de reintento
+                servers[index].active = true; // Reactivar el servidor si la comprobación de salud es exitosa
+                servers[index].retryAttempted = false;
             } catch (error) {
                 if (error.message === 'socket hang up' && !servers[index].retryAttempted) {
                     console.log(`Reintentando la conexión con el servidor ${server.url}...`);
@@ -62,6 +56,9 @@ function checkServerHealth() {
                     console.error(`Error en health check para el servidor ${server.url}: ${error.message}`);
                     if (servers[index].failCount >= 3) {
                         servers[index].active = false;
+                        setTimeout(() => { // Volver a comprobar la salud del servidor después de 30 segundos
+                            servers[index].healthCheckStarted = true;
+                        }, 30000);
                     }
                 }
             }
