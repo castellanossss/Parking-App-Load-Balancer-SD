@@ -64,7 +64,7 @@ app.all('*', upload.any(), async (req, res) => {
         const server = servers[serverIndex];
         currentServer = serverIndex;
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
 
         try {
             console.log(`[${req.method}] - Solicitud del cliente ${req.socket.remoteAddress} redirigida a ${server.url + req.url}`);
@@ -96,7 +96,7 @@ app.all('*', upload.any(), async (req, res) => {
             requestOptions.signal = controller.signal; 
 
             const response = await fetch(server.url + req.url, requestOptions);
-            clearTimeout(timeoutId); // Limpia el temporizador si la solicitud se completa a tiempo
+            clearTimeout(timeoutId); 
 
             if (response.ok) {
                 response.body.pipe(res);
@@ -104,7 +104,7 @@ app.all('*', upload.any(), async (req, res) => {
                 break;
             }
         } catch (error) {
-            clearTimeout(timeoutId); // Limpia el temporizador si ocurre un error
+            clearTimeout(timeoutId); 
             console.error(`Error al conectar con el servidor ${server.url}: ${error.message}`);
             if (error.name === 'AbortError') {
                 console.log(`La solicitud al servidor ${server.url} se canceló por tiempo de espera`);
